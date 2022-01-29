@@ -1,12 +1,17 @@
 import functools
+import logging
 
 import torch
+import torch.nn.functional as F
+from torch.optim.lr_scheduler import LambdaLR
 import math
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 
 def get_device_of(tensor):
-    """This funtion returns the device of the tensor
+    """Returns the device of the tensor
     refer to https://github.com/allenai/allennlp/blob/master/allennlp/nn/util.py
 
     Arguments:
@@ -23,7 +28,7 @@ def get_device_of(tensor):
 
 
 def get_range_vector(size, device):
-    """This function returns a range vector with the desired size, starting at 0
+    """Returns a range vector with the desired size, starting at 0
     the CUDA implementation is meant to avoid copy data from CPU to GPU
     refer to https://github.com/allenai/allennlp/blob/master/allennlp/nn/util.py
 
@@ -42,7 +47,7 @@ def get_range_vector(size, device):
 
 
 def flatten_and_batch_shift_indices(indices, sequence_length):
-    """This funtion returns a vector that correctly indexes into the flattened target,
+    """Returns a vector that correctly indexes into the flattened target,
     the sequence length of the target must be provided to compute the appropriate offsets.
     refer to https://github.com/allenai/allennlp/blob/master/allennlp/nn/util.py
 
@@ -70,7 +75,7 @@ def flatten_and_batch_shift_indices(indices, sequence_length):
 
 
 def batched_index_select(target, indices, flattened_indices=None):
-    """This funtion returns selected values in the target with respect to the provided indices,
+    """Returns selected values in the target with respect to the provided indices,
     which have size ``(batch_size, d_1, ..., d_n, embedding_size)``
     refer to https://github.com/allenai/allennlp/blob/master/allennlp/nn/util.py
 
@@ -100,8 +105,25 @@ def batched_index_select(target, indices, flattened_indices=None):
     return selected_targets
 
 
+def batched_2d_index_select(target, indices):
+    """Return values in the target with respect to the provided
+    indices in two dimensions.
+
+    Args:
+        target (torch.Tensor): target tensor, [batch_size, channel, w, h]
+        indices (torch.LongTensor): indices, [batch_size, d]
+    
+    Returns:
+        torch.Tensor -- selected tensor
+    """
+    _, channel, _, h = target.size()
+    indices_1 = indices.unsqueeze(1).unsqueeze(-1).expand(-1, channel, -1, h)
+    indices_2 = indices.unsqueeze(1).unsqueeze(1).expand(-1, channel, indices.size()[-1], -1)
+    return target.gather(2, indices_1).gather(3, indices_2)
+
+
 def get_padding_vector(size, dtype, device):
-    """This funtion initializes padding unit
+    """Initializes padding unit
 
     Arguments:
         size {int} -- padding unit size
@@ -119,7 +141,7 @@ def get_padding_vector(size, dtype, device):
 
 
 def array2tensor(array, dtype, device):
-    """This function transforms numpy array to tensor
+    """Transforms numpy array to tensor
 
     Arguments:
         array {numpy.array} -- numpy array
@@ -147,7 +169,7 @@ def gelu(x):
 
 
 def pad_vecs(vecs, padding_size, dtype, device):
-    """This function pads vectors for batch
+    """Pads vectors for batch
 
     Arguments:
         vecs {list} -- vector list
@@ -161,11 +183,7 @@ def pad_vecs(vecs, padding_size, dtype, device):
     max_length = max(len(vec) for vec in vecs)
 
     if max_length == 0:
-        pad_vecs = torch.cat([
-            get_padding_vector(
-                (1, padding_size), dtype, device).unsqueeze(0)
-            for _ in vecs
-        ], 0)
+        pad_vecs = torch.cat([get_padding_vector((1, padding_size), dtype, device).unsqueeze(0) for _ in vecs], 0)
         # mask_vecs = array2tensor(np.ones((len(vecs), 1)), vecs.dtype,
         #                          get_device_of(vecs))
         return pad_vecs  # , mask_vecs
@@ -173,17 +191,14 @@ def pad_vecs(vecs, padding_size, dtype, device):
     pad_vecs = []
     # mask_vecs = []
     for vec in vecs:
-        pad_vec = torch.cat(
-            vec + [get_padding_vector((1, padding_size), dtype, device)] *
-            (max_length - len(vec)), 0).unsqueeze(0)
+        pad_vec = torch.cat(vec + [get_padding_vector((1, padding_size), dtype, device)] * (max_length - len(vec)),
+                            0).unsqueeze(0)
         # mask_vec = array2tensor(
         #     np.array([1] * len(vec) + [0] *
         #              (max_length - len(vec))).reshape(1, max_length),
         #     vecs.dtype, get_device_of(vecs))
 
-        assert pad_vec.size() == (
-            1, max_length,
-            padding_size), "the size of pad vector is not correct"
+        assert pad_vec.size() == (1, max_length, padding_size), "the size of pad vector is not correct"
         # assert mask_vec.size() == (
         #     1, max_length), "the size of mask vector is not correct"
 
@@ -193,7 +208,7 @@ def pad_vecs(vecs, padding_size, dtype, device):
 
 
 def get_bilstm_minus(batch_seq_encoder_repr, span_list, seq_lens):
-    """This function gets span representation using bilstm minus
+    """TGets span representation using bilstm minus
 
     Arguments:
         batch_seq_encoder_repr {list} -- batch sequence encoder representation
@@ -205,32 +220,24 @@ def get_bilstm_minus(batch_seq_encoder_repr, span_list, seq_lens):
     """
 
     assert len(batch_seq_encoder_repr) == len(
-        span_list
-    ), "the length of batch seq encoder repr is not equal to span list's length"
+        span_list), "the length of batch seq encoder repr is not equal to span list's length"
 
-    assert len(span_list) == len(
-        seq_lens
-    ), "the length of span list is not equal to batch seq lens's length"
+    assert len(span_list) == len(seq_lens), "the length of span list is not equal to batch seq lens's length"
 
     hidden_size = batch_seq_encoder_repr.size(-1)
     span_vecs = []
-    for seq_encoder_repr, (s, e), seq_len in zip(batch_seq_encoder_repr,
-                                                 span_list, seq_lens):
+    for seq_encoder_repr, (s, e), seq_len in zip(batch_seq_encoder_repr, span_list, seq_lens):
         rnn_output = seq_encoder_repr[:seq_len]
-        forward_rnn_output, backward_rnn_output = rnn_output.split(
-            hidden_size // 2, 1)
-        forward_span_vec = get_forward_segment(
-            forward_rnn_output, s, e, get_device_of(forward_rnn_output))
-        backward_span_vec = get_backward_segment(
-            backward_rnn_output, s, e, get_device_of(backward_rnn_output))
-        span_vec = torch.cat([forward_span_vec, backward_span_vec],
-                             0).unsqueeze(0)
+        forward_rnn_output, backward_rnn_output = rnn_output.split(hidden_size // 2, 1)
+        forward_span_vec = get_forward_segment(forward_rnn_output, s, e, get_device_of(forward_rnn_output))
+        backward_span_vec = get_backward_segment(backward_rnn_output, s, e, get_device_of(backward_rnn_output))
+        span_vec = torch.cat([forward_span_vec, backward_span_vec], 0).unsqueeze(0)
         span_vecs.append(span_vec)
     return torch.cat(span_vecs, 0)
 
 
 def get_forward_segment(forward_rnn_output, s, e, device):
-    """This function gets span representaion in forward rnn
+    """Gets span representation in forward rnn
 
     Arguments:
         forward_rnn_output {tensor} -- forward rnn output
@@ -256,7 +263,7 @@ def get_forward_segment(forward_rnn_output, s, e, device):
 
 
 def get_backward_segment(backward_rnn_output, s, e, device):
-    """This function gets span representaion in backward rnn
+    """Gets span representation in backward rnn
 
     Arguments:
         forward_rnn_output {tensor} -- backward rnn output
@@ -282,7 +289,7 @@ def get_backward_segment(backward_rnn_output, s, e, device):
 
 
 def get_dist_vecs(span_list, max_sent_len, device):
-    """This function gets distance embedding
+    """Gets distance embedding
 
     Arguments:
         span_list {list} -- span list
@@ -305,7 +312,7 @@ def get_dist_vecs(span_list, max_sent_len, device):
 
 
 def get_conv_vecs(batch_token_repr, span_list, span_batch_size, conv_layer):
-    """This funciton gets span vector representation through convolution layer
+    """Gets span vector representation through convolution layer
 
     Arguments:
         batch_token_repr {list} -- batch token representation
@@ -317,9 +324,7 @@ def get_conv_vecs(batch_token_repr, span_list, span_batch_size, conv_layer):
         tensor -- conv vectors
     """
 
-    assert len(batch_token_repr) == len(
-        span_list
-    ), "the length of batch token repr is not equal to span list's length"
+    assert len(batch_token_repr) == len(span_list), "the length of batch token repr is not equal to span list's length"
 
     span_vecs = []
     for token_repr, (s, e) in zip(batch_token_repr, span_list):
@@ -331,21 +336,38 @@ def get_conv_vecs(batch_token_repr, span_list, span_batch_size, conv_layer):
 
     span_conv_vecs = []
     for id in range(0, len(span_vecs), span_batch_size):
-        span_pad_vecs = pad_vecs(
-            span_vecs[id:id + span_batch_size],
-            conv_layer.get_input_dims(), batch_token_repr[0].dtype,
-            get_device_of(batch_token_repr[0]))
+        span_pad_vecs = pad_vecs(span_vecs[id:id + span_batch_size], conv_layer.get_input_dims(),
+                                 batch_token_repr[0].dtype, get_device_of(batch_token_repr[0]))
         span_conv_vecs.append(conv_layer(span_pad_vecs))
     return torch.cat(span_conv_vecs, dim=0)
 
 
+def get_exponential_schedule_with_warmup(optimizer, num_warmup_steps, num_training_steps, gamma, last_epoch=-1):
+    """Create a schedule with a learning rate that decreases exponentially from
+    the initial lr set in the optimizer to 0, after a warmup period during which it increases linearly
+    from 0 to the initial lr set in the optimizer.
+
+    Args:
+        optimizer (torch.optim.Optimizer):  The optimizer for which to schedule the learning rate.
+        num_warmup_steps (int): The number of steps for the warmup phase.
+        num_training_steps (int): The total number of training steps.
+        gamma ([type]): Multiplicative factor of learning rate decay.
+        last_epoch (int, optional): The index of the last epoch when resuming training.. Defaults to -1.
+    """
+    def lr_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps))
+        return max(0.0, gamma**(num_training_steps - num_warmup_steps))
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+
 def get_n_trainable_parameters(model):
-    """This funtion calculates the number of trainable parameters
-    of the model
-    
+    """Calculates the number of trainable parameters of the model
+
     Arguments:
         model {nn.Module} -- model
-    
+
     Returns:
         int -- the number of trainable parameters of the model
     """
@@ -355,3 +377,19 @@ def get_n_trainable_parameters(model):
         if param.requires_grad:
             cnt += functools.reduce(lambda x, y: x * y, list(param.size()), 1)
     return cnt
+
+
+def js_div(p, q, reduction='batchmean'):
+    """Calculates Jensen Shannon Divergence (JSD).
+
+    Args:
+        p (tensor): distribution p
+        q (tensor): distribution q
+        reduction (str, optional): reduction. Defaults to 'batchmean'.
+
+    Returns:
+        tensor: JS divergence
+    """
+
+    m = 0.5 * (p + q)
+    return (F.kl_div(p, m, reduction=reduction) + F.kl_div(q, m, reduction=reduction)) * 0.5
