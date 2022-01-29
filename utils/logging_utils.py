@@ -1,10 +1,5 @@
-from __future__ import absolute_import
-
 import logging
 import os
-
-# universal logger
-logger = logging.getLogger(__name__)
 
 
 def init_logger(
@@ -12,8 +7,8 @@ def init_logger(
         console_log_level=logging.NOTSET,
         log_file=None,
         log_file_level=logging.NOTSET):
-    """This funtion initializes a customized logger
-    
+    """Initializes a customized logger
+
     Keyword Arguments:
         root_log_level {int} -- root logging level (default: {logging.DEBUG})
         console_log_level {int} -- console logging level (default: {logging.NOTSET})
@@ -21,13 +16,13 @@ def init_logger(
         log_file_level {int} -- logging file level (default: {logging.NOTSET})
     """
 
-    logger.setLevel(root_log_level)
-    log_format = logging.Formatter("[%(asctime)s - %(filename)s[line:%(lineno)d] - %(levelname)s]: %(message)s")
+    log_format = logging.Formatter("[%(asctime)s - %(filename)s - line:%(lineno)d - %(levelname)s]: %(message)s")
+    handlers = []
 
     console_handler = logging.StreamHandler()
     console_handler.setLevel(console_log_level)
     console_handler.setFormatter(log_format)
-    logger.addHandler(console_handler)
+    handlers.append(console_handler)
 
     if log_file is not None and log_file != '':
         if os.path.exists(log_file):
@@ -37,4 +32,6 @@ def init_logger(
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(log_file_level)
         file_handler.setFormatter(log_format)
-        logger.addHandler(file_handler)
+        handlers.append(file_handler)
+
+    logging.basicConfig(level=root_log_level, handlers=handlers)
