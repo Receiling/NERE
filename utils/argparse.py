@@ -241,6 +241,7 @@ class ConfigurationParer():
         # logging arguments
         group = self.parser.add_argument_group('logging')
         group.add('-logging_steps', '--logging_steps', type=int, default=10, help='Logging every N update steps.')
+        group.add('-tensorboard', '--tensorboard', action='store_true', help='turn on tensorboard.')
         group.add('-root_log_level',
                   '--root_log_level',
                   type=str,
@@ -283,6 +284,11 @@ class ConfigurationParer():
 
         if not os.path.exists(args.model_checkpoints_dir):
             os.makedirs(args.model_checkpoints_dir)
+        
+        if args.tensorboard:
+            args.tensorboard_dir = os.path.join(args.save_dir, 'tb_output')
+            if not os.path.exists(args.tensorboard_dir):
+                os.makedirs(args.tensorboard_dir)
 
         assert os.path.exists(args.data_dir), f"dataset directory {args.data_dir} not exists !!!"
         for file in ['train_file', 'dev_file', 'test_file']:
