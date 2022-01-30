@@ -1,20 +1,15 @@
 import json
 from collections import defaultdict
+import logging
 
-from utils.logging import logger
+logger = logging.getLogger(__name__)
 
 
-class ACEReader():
-    """define text data reader and preprocess data
+class TextBaseReader():
+    """Define text reader to pre-process text data on the dataset
     """
-    def __init__(self,
-                 file_path,
-                 is_test=False,
-                 low_case=True,
-                 max_len=dict(),
-                 tokenizers=dict(),
-                 entity_schema='BIEOU'):
-        """This function defines file path and indicates training or testing
+    def __init__(self, file_path, is_test=False, low_case=True, max_len=dict(), entity_schema='BIEOU'):
+        """Defines file path and indicates training or testing
         
         Arguments:
             file_path {str} -- file path
@@ -23,7 +18,6 @@ class ACEReader():
             is_test {bool} -- indicate training or testing (default: {False})
             low_case {bool} -- transform word to low case (default: {True})
             max_len {dict} -- max length for some namespace (default: {dict()})
-            tokenizers {dict} -- tokenizers dict { name: tokenizer } (default: {dict()})
             entity_schema {str} -- entity tagging method (default: {'BIEOU'})
         """
 
@@ -31,7 +25,6 @@ class ACEReader():
         self.is_test = is_test
         self.low_case = low_case
         self.max_len = dict(max_len)
-        self.tokenizers = dict(tokenizers)
         self.entity_schema = entity_schema
         self.seq_lens = defaultdict(list)
 
@@ -45,37 +38,65 @@ class ACEReader():
                 sentence = {}
 
                 state, results = self.get_tokens(line)
-                self.seq_lens['tokens'].append(len(results['tokens']))
-                if not state or ('tokens' in self.max_len
-                                 and len(results['tokens']) > self.max_len['tokens']):
-                    continue
-                sentence.update(results)
-
-                # test data only contains sentence text
-                # to predict entities and relations
-                if self.is_test:
-                    yield sentence
-
-                state, results = self.get_entity_label(line, results['tokens'])
-                for key, result in results.items():
-                    self.seq_lens[key].append(len(result))
-                    if key in self.max_len and len(result) > self.max_len[key]:
-                        state = False
                 if not state:
                     continue
                 sentence.update(results)
 
-                state, results = self.get_relation_label(line, results['idx2ent'])
-                self.seq_lens['span2rel'].append(len(results['span2rel']))
-                if not state or ('span2rel' in self.max_len
-                                 and len(results['span2rel']) > self.max_len['span2rel']):
+                state, results = self.get_subword_tokens(line)
+                if state:
+                    if len(sentence['tokens']) != len(sentence['subword_tokens_index']):
+                        logger.error(
+                            "article id: {} sentence id: {} subword_tokens_index length is not equal to tokens.".format(
+                                line['articleId'], line['sentId']))
+                        continue
+                    sentence.update(results)
+
+                # test data only contains sentence text to predict entities and relations
+                if self.is_test:
+                    if not self.validate(line, sentence):
+                        continue
+
+                    yield sentence
+
+                state, results = self.get_entity_label(line, len(sentence['tokens']))
+                if not state:
                     continue
                 sentence.update(results)
 
+                state, results = self.get_relation_label(line, sentence['idx2ent'])
+                if not state:
+                    continue
+                sentence.update(results)
+
+                if not self.validate(line, sentence):
+                    continue
+
                 yield sentence
 
+    def validate(self, line, sentence):
+        """Validates the length limitation
+
+        Args:
+            line (dict): text
+            sentence (dict): results
+
+        Returns:
+            Bool: whether the results are valid
+        """
+
+        for key, result in sentence.items():
+            if key in self.max_len and len(result) > self.max_len[key]:
+                logger.error(
+                    f"article id: {line['articleId']} sentence id: {line['sentId']} exceeds the length limit of {key}.")
+                return False
+
+        for key, result in sentence.items():
+            self.seq_lens[key].append(len(result))
+
+        return True
+
     def get_tokens(self, line):
-        """This function splits text into tokens
+        """Splits text into tokens
 
         Arguments:
             line {dict} -- text
@@ -87,31 +108,63 @@ class ACEReader():
 
         results = {}
 
-        if 'sentText' not in line:
-            logger.error("article id: {} sentence id: {} doesn't contain 'sentText'.".format(
+        if 'sentText' not in line and 'tokens' not in line:
+            logger.error("article id: {} sentence id: {} doesn't contain 'sentText' and 'tokens'.".format(
                 line['articleId'], line['sentId']))
             return False, results
 
-        tokens = line['sentText'].strip().split()
+        if 'tokens' in line:
+            tokens = line['tokens']
+        else:
+            tokens = line['sentText'].strip().split(' ')
+
         if self.low_case:
             tokens = list(map(str.lower, tokens))
+        results['text'] = line['sentText']
         results['tokens'] = tokens
         return True, results
 
-    def get_entity_label(self, line, tokens):
-        """This function constructs entity label sequence and entity span sequence
+    def get_subword_tokens(self, line):
+        """Splits text into subword tokens
+
+        Arguments:
+            line {dict} -- text
+
+        Returns:
+            bool -- execute state
+            dict -- results: tokens
+        """
+
+        results = {}
+
+        if 'subwordSentText' not in line or 'subwordTokensIndex' not in line:
+            return False, results
+
+        subword_tokens = line['subwordSentText'].strip().split(' ')
+        if self.low_case:
+            subword_tokens = list(map(str.lower, subword_tokens))
+        results['subword_tokens'] = subword_tokens
+        results['subword_tokens_index'] = [span[0] for span in line['subwordTokensIndex']]
+
+        if 'subwordSegmentIds' in line:
+            results['subword_segment_ids'] = list(line['subwordSegmentIds'])
+
+        return True, results
+
+    def get_entity_label(self, line, sent_length):
+        """Constructs entity label sequence and entity span sequence
         using entity_schema, in addition to construct mapping relation
         from offset to entity label
 
         Arguments:
             line {dict} -- text
-            tokens {list} -- tokens
+            sent_length {int} -- sent length
 
         Returns:
             bool -- execute state
             dict -- results: entity span label sequence,
             entity label sequence, entity id mapping to entity,
-            entity span mapping to entity lable,
+            entity span mapping to entity label,
             tokenized tokens, tokenized index, tokenized label
         """
 
@@ -122,17 +175,15 @@ class ACEReader():
                 line['articleId'], line['sentId']))
             return False, results
 
-        length = len(tokens)
-        entity_label = ['O'] * length
+        entity_label = ['O'] * sent_length
         idx2ent = {}
         span2ent = {}
 
         for entity in line['entityMentions']:
             st, ed = entity['offset']
             idx2ent[entity['emId']] = ((st, ed), entity['text'])
-            if st >= ed or st < 0 or st > length or ed < 0 or ed > length:
-                logger.error("article id: {} sentence id: {} offset error'.".format(
-                    line['articleId'], line['sentId']))
+            if st >= ed or st < 0 or st > sent_length or ed < 0 or ed > sent_length:
+                logger.error("article id: {} sentence id: {} offset error'.".format(line['articleId'], line['sentId']))
                 return False, results
 
             span2ent[(st, ed)] = entity['label']
@@ -160,28 +211,10 @@ class ACEReader():
         entity_span_label = list(map(lambda x: x[0], entity_label))
         results['entity_span_labels'] = entity_span_label
 
-        for name, tokenizer in self.tokenizers.items():
-            tokenized_tokens = ['[CLS]']
-            token_index = []
-            token_span_labels = ['[CLS]']
-            index = 1
-            for idx, token in enumerate(tokens):
-                tokenized_token = list(tokenizer(token))
-                token_index.append(index)
-                index += len(tokenized_token)
-                tokenized_tokens.extend(tokenized_token)
-                token_span_labels.extend([entity_span_label[idx]] + ['X'] *
-                                         (len(tokenized_token) - 1))
-            tokenized_tokens.append('[SEP]')
-            token_span_labels.append('[SEP]')
-            results[name + '_tokens'] = tokenized_tokens
-            results[name + '_index'] = token_index
-            results[name + '_span_labels'] = token_span_labels
-
         return True, results
 
     def get_relation_label(self, line, idx2ent):
-        """This function constructs mapping relation from offset to relation label
+        """Constructs mapping relation from offset to relation label
 
         Arguments:
             line {dict} -- text
@@ -189,15 +222,14 @@ class ACEReader():
 
         Returns:
             bool -- execute state
-            dict -- span2rel: two entity span mapping to relation lable
+            dict -- span2rel: two entity span mapping to relation label
         """
 
         results = {}
 
         if 'relationMentions' not in line:
-            logger.error(
-                "article id: {} sentence id: {} doesn't contain 'relationMentions'.".format(
-                    line['articleId'], line['sentId']))
+            logger.error("article id: {} sentence id: {} doesn't contain 'relationMentions'.".format(
+                line['articleId'], line['sentId']))
             return False, results
 
         span2rel = {}
@@ -206,9 +238,8 @@ class ACEReader():
             entity2_span, entity2_text = idx2ent[relation['em2Id']]
 
             if entity1_text != relation['em1Text'] or entity2_text != relation['em2Text']:
-                logger.error(
-                    "article id: {} sentence id: {} entity text doesn't match realtiaon text.".
-                    format(line['articleId'], line['sentId']))
+                logger.error("article id: {} sentence id: {} entity text doesn't match relation text.".format(
+                    line['articleId'], line['sentId']))
                 return False, None
 
             direction = '>'
@@ -218,9 +249,8 @@ class ACEReader():
 
             # two entity overlap
             if entity1_span[1] > entity2_span[0]:
-                logger.error(
-                    "article id: {} sentence id: {} two entity ({}, {}) are overlap.".format(
-                        line['articleId'], line['sentId'], relation['em1Id'], relation['em2Id']))
+                logger.error("article id: {} sentence id: {} two entity ({}, {}) are overlap.".format(
+                    line['articleId'], line['sentId'], relation['em1Id'], relation['em2Id']))
                 continue
 
             span2rel[(entity1_span, entity2_span)] = relation['label'] + '@' + direction

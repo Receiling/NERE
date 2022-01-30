@@ -1,13 +1,12 @@
 import os
 import gzip
+import logging
 
-import numpy as np
-
-from utils.logging import logger
+logger = logging.getLogger(__name__)
 
 
 def glove_reader(file_path, embedding_dim):
-    """This function return glove embedding dict from glove file
+    """Returns glove embedding dict from glove file
 
     Arguments:
         file_path {str} -- glove file path
@@ -21,8 +20,8 @@ def glove_reader(file_path, embedding_dim):
     """
 
     if not os.path.exists(file_path):
-        logger.error("golve file {} not exits.".format(file_path))
-        raise ValueError("golve file {} not exits.".format(file_path))
+        logger.error("glove file {} not exits.".format(file_path))
+        raise ValueError("glove file {} not exits.".format(file_path))
 
     glove = {}
 
@@ -33,10 +32,7 @@ def glove_reader(file_path, embedding_dim):
 
     for line in fin:
         words = line.strip().split()
-        assert len(
-            words
-        ) == embedding_dim + 1, "the dim of word `{}` is not correct".format(
-            words[0])
+        assert len(words) == embedding_dim + 1, "the dim of word `{}` is not correct".format(words[0])
         glove[words[0]] = list(map(float, words[1:]))
 
     fin.close()
