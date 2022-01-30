@@ -3,15 +3,14 @@ from abc import ABC, abstractclassmethod
 
 class Field(ABC):
     """Abstract class `Field` define one indexing method,
-    genenrate counter from raw text data and index token in raw text data
+    generate counter from raw text data and index token in raw text data
 
     Arguments:
         ABC {ABC} -- abstract base class
     """
-
     @abstractclassmethod
     def count_vocab_items(self, counter, sentences):
-        """This function constructs counter using each sentence content,
+        """Constructs counter using each sentence content,
         prepare for vocabulary
 
         Arguments:
@@ -22,13 +21,13 @@ class Field(ABC):
         raise NotImplementedError
 
     @abstractclassmethod
-    def index(self, instance, voacb, sentences):
-        """This function constrcuts instance using sentences and vocabulary,
-        each namespace is a mappping method using different type data
+    def index(self, instance, vocab, sentences):
+        """Constrcuts instance using sentences and vocabulary,
+        each namespace is a mapping method using different type data
 
         Arguments:
             instance {dict} -- collections of various fields
-            voacb {dict} -- vocabulary
+            vocab {dict} -- vocabulary
             sentences {list} -- text data
         """
 

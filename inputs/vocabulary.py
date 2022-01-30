@@ -1,11 +1,12 @@
 from bidict import bidict
 import pickle
+import logging
 
-from utils.logging import logger
+logger = logging.getLogger(__name__)
 
 
 class Vocabulary():
-    """This class maps strings to integers, which also allow many namespaces
+    """Maps strings to id, which also allows many namespaces
     """
 
     DEFAULT_PAD_TOKEN = '*@PAD@*'
@@ -20,7 +21,7 @@ class Vocabulary():
                  no_unk_namespace=list(),
                  contain_pad_namespace=dict(),
                  contain_unk_namespace=dict()):
-        """initialize vocabulary
+        """Initialize vocabulary
 
         Keyword Arguments:
             counters {dict} -- multiple counter (default: {dict()})
@@ -41,11 +42,10 @@ class Vocabulary():
         self.contain_unk_namespace = dict(contain_unk_namespace)
         self.vocab = dict()
 
-        self.extend_from_counter(counters, self.min_count, self.no_pad_namespace,
-                                 self.no_unk_namespace)
+        self.extend_from_counter(counters, self.min_count, self.no_pad_namespace, self.no_unk_namespace)
 
-        self.extend_from_pretrained_vocab(pretrained_vocab, self.intersection_namespace,
-                                          self.no_pad_namespace, self.no_unk_namespace)
+        self.extend_from_pretrained_vocab(pretrained_vocab, self.intersection_namespace, self.no_pad_namespace,
+                                          self.no_unk_namespace)
 
         logger.info("Initialize vocabulary successfully.")
 
@@ -56,7 +56,7 @@ class Vocabulary():
                                      no_unk_namespace=list(),
                                      contain_pad_namespace=dict(),
                                      contain_unk_namespace=dict()):
-        """extend vocabulary from pretrained vocab
+        """Extends vocabulary from pretrained vocab
 
         Arguments:
             pretrained_vocab {dict} -- pretrained vocabulary
@@ -75,18 +75,16 @@ class Vocabulary():
         self.contain_pad_namespace.update(dict(contain_pad_namespace))
         self.contain_unk_namespace.update(dict(contain_unk_namespace))
 
-        for namespace, counter in pretrained_vocab.items():
+        for namespace, vocab in pretrained_vocab.items():
             self.__namespace_init(namespace)
             is_intersection = namespace in self.intersection_namespace
-            intersection_vocab = self.vocab[
-                self.intersection_namespace[namespace]] if is_intersection else []
-            for key in counter:
+            intersection_vocab = self.vocab[self.intersection_namespace[namespace]] if is_intersection else []
+            for key, value in vocab.items():
                 if not is_intersection or key in intersection_vocab:
-                    self.vocab[namespace][key] = len(self.vocab[namespace])
+                    self.vocab[namespace][key] = value
 
-            logger.info(
-                "Vocabulay {} (size: {}) was constructed successfully from pretrained_vocab.".
-                format(namespace, len(self.vocab[namespace])))
+            logger.info("Vocabulary {} (size: {}) was constructed successfully from pretrained_vocab.".format(
+                namespace, len(self.vocab[namespace])))
 
     def extend_from_counter(self,
                             counters,
@@ -95,7 +93,7 @@ class Vocabulary():
                             no_unk_namespace=list(),
                             contain_pad_namespace=dict(),
                             contain_unk_namespace=dict()):
-        """extend vocabulary from counter
+        """Extends vocabulary from counter
 
         Arguments:
             counters {dict} -- multiply counter
@@ -122,11 +120,11 @@ class Vocabulary():
                 if counter[key] >= minc:
                     self.vocab[namespace][key] = len(self.vocab[namespace])
 
-            logger.info("Vocabulay {} (size: {}) was constructed successfully from counter.".format(
+            logger.info("Vocabulary {} (size: {}) was constructed successfully from counter.".format(
                 namespace, len(self.vocab[namespace])))
 
     def add_tokens_to_namespace(self, tokens, namespace):
-        """This function adds tokens to one namespace for extending vocabulary
+        """Adds tokens to one namespace for extending vocabulary
 
         Arguments:
             tokens {list} -- token list
@@ -142,7 +140,7 @@ class Vocabulary():
                 self.vocab[namespace][token] = len(self.vocab[namespace])
 
     def get_token_index(self, token, namespace):
-        """This function gets token index in one namespace of vocabulary
+        """Gets token index in one namespace of vocabulary
 
         Arguments:
             token {str} -- token
@@ -159,16 +157,14 @@ class Vocabulary():
             return self.vocab[namespace][token]
 
         if namespace not in self.no_unk_namespace:
-            return self.vocab[namespace][Vocabulary.DEFAULT_UNK_TOKEN]
+            return self.get_unknown_index(namespace)
 
-        logger.error("Can not find the index of {} from a no unknown token namespace {}.".format(
+        logger.error("Can not find the index of {} from a no unknown token namespace {}.".format(token, namespace))
+        raise RuntimeError("Can not find the index of {} from a no unknown token namespace {}.".format(
             token, namespace))
-        raise RuntimeError(
-            "Can not find the index of {} from a no unknown token namespace {}.".format(
-                token, namespace))
 
     def get_token_from_index(self, index, namespace):
-        """This function gets token using index in vocabulary
+        """Gets token using index in vocabulary
 
         Arguments:
             index {int} -- index
@@ -188,7 +184,7 @@ class Vocabulary():
         raise RuntimeError("The index {} is out of vocabulary {} range.".format(index, namespace))
 
     def get_vocab_size(self, namespace):
-        """This function gets the size of one namespace in vocabulary
+        """Gets the size of one namespace in vocabulary
 
         Arguments:
             namespace {str} -- namespace name
@@ -200,7 +196,7 @@ class Vocabulary():
         return len(self.vocab[namespace])
 
     def get_all_namespaces(self):
-        """This function gets all namespaces
+        """Gets all namespaces
 
         Returns:
             list -- all namespaces vocabulary contained
@@ -209,7 +205,7 @@ class Vocabulary():
         return set(self.vocab)
 
     def get_padding_index(self, namespace):
-        """This function gets padding token index in one namespace of vocabulary
+        """Gets padding token index in one namespace of vocabulary
 
         Arguments:
             namespace {str} -- namespace name
@@ -233,7 +229,7 @@ class Vocabulary():
         raise RuntimeError("Namespace {} doesn't has paddding token.".format(namespace))
 
     def get_unknown_index(self, namespace):
-        """This function gets unknown token index in one namespace of vocabulary
+        """Gets unknown token index in one namespace of vocabulary
 
         Arguments:
             namespace {str} -- namespace name
@@ -256,20 +252,20 @@ class Vocabulary():
         logger.error("Namespace {} doesn't has unknown token.".format(namespace))
         raise RuntimeError("Namespace {} doesn't has unknown token.".format(namespace))
 
-    def get_namespace_tokens(self, namesapce):
-        """This function returns all tokens in one namespace
+    def get_namespace_tokens(self, namespace):
+        """Returns all tokens in one namespace
 
         Arguments:
-            namesapce {str} -- namespce name
+            namespace {str} -- namespace name
 
         Returns:
             dict_keys -- all tokens
         """
 
-        return self.vocab[namesapce]
+        return self.vocab[namespace]
 
     def save(self, file_path):
-        """This function saves vocabulary into file
+        """Saves vocabulary into file
 
         Arguments:
             file_path {str} -- file path
@@ -279,7 +275,7 @@ class Vocabulary():
 
     @classmethod
     def load(cls, file_path):
-        """This function loads vocabulary from file
+        """Loads vocabulary from file
 
         Arguments:
             file_path {str} -- file path
@@ -291,8 +287,7 @@ class Vocabulary():
         return pickle.load(open(file_path, 'rb'), encoding='utf-8')
 
     def __namespace_init(self, namespace):
-        """This function initializes a namespace,
-        adds pad and unk token to one namespace of vacabulary
+        """Initializes a namespace, adds pad and unk token to one namespace of vocabulary
 
         Arguments:
             namespace {str} -- namespace

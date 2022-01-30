@@ -1,32 +1,29 @@
-from utils.logging import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Instance():
     """ `Instance` is the collection of multiple `Field`
     """
-
-    def __init__(self, fields, pretrained_namespace=list()):
-        """This function initializes instance
+    def __init__(self, fields):
+        """Initializes instance
 
         Arguments:
             fields {list} -- field list
-
-        Keyword Arguments:
-            pretrained_namespace {list} -- pretrained namespace list (default: {list()})
         """
 
         self.fields = list(fields)
-        self.pretrained_namespace = set(pretrained_namespace)
         self.instance = {}
         for field in self.fields:
             self.instance[field.namespace] = []
+        self.vocab_dict = {}
+        self.vocab_index()
 
     def __getitem__(self, namespace):
         if namespace not in self.instance:
-            logger.error(
-                "can not find the namespace {} in instance.".format(namespace))
-            raise RuntimeError(
-                "can not find the namespace {} in instance.".format(namespace))
+            logger.error("can not find the namespace {} in instance.".format(namespace))
+            raise RuntimeError("can not find the namespace {} in instance.".format(namespace))
         else:
             self.instance.get(namespace, None)
 
@@ -36,35 +33,24 @@ class Instance():
     def __len__(self):
         return len(self.fields)
 
-    def add_fields(self, fields, pretrained_namespace):
-        """This function adds fields to instance
+    def add_fields(self, fields):
+        """Adds fields to instance
 
         Arguments:
             field {Field} -- field list
-            pretrained_namespace {list} -- pretrained namespace list
         """
 
         for field in fields:
-            if field.namesapce not in self.instance:
+            if field.namespace not in self.instance:
                 self.fields.append(field)
-                self.instance[field.namesapce] = []
+                self.instance[field.namespace] = []
             else:
-                logger.warning('Field {} has been added before.'.format(
-                    field.name))
-        self.pretrained_namespace.update(set(pretrained_namespace))
+                logger.warning('Field {} has been added before.'.format(field.name))
 
-    def add_namespace(self, namespace):
-        """This function adds namespace to instance only,
-        but not add to filed list
-
-        Arguments:
-            namespace {str} -- namespace name
-        """
-
-        self.instance[namespace] = []
+        self.vocab_index()
 
     def count_vocab_items(self, counter, sentences):
-        """This funtion constructs multiple namespace in counter
+        """Constructs multiple namespace in counter
 
         Arguments:
             counter {dict} -- counter
@@ -72,11 +58,10 @@ class Instance():
         """
 
         for field in self.fields:
-            if field.namespace not in self.pretrained_namespace:
-                field.count_vocab_items(counter, sentences)
+            field.count_vocab_items(counter, sentences)
 
     def index(self, vocab, sentences):
-        """This funtion indexes token using vocabulary,
+        """Indexes token using vocabulary,
         then update instance
 
         Arguments:
@@ -88,7 +73,7 @@ class Instance():
             field.index(self.instance, vocab, sentences)
 
     def get_instance(self):
-        """This function get instance
+        """Gets instance
 
         Returns:
             dict -- instance
@@ -97,10 +82,27 @@ class Instance():
         return self.instance
 
     def get_size(self):
-        """This funtion gets the size of instance
+        """Gets the size of instance
 
         Returns:
             int -- instance size
         """
 
         return len(self.instance[self.fields[0].namespace])
+
+    def vocab_index(self):
+        """Constructs vocabulary dict of fields
+        """
+
+        for field in self.fields:
+            if hasattr(field, 'vocab_namespace'):
+                self.vocab_dict[field.namespace] = field.vocab_namespace
+
+    def get_vocab_dict(self):
+        """Gets the vocab dict of instance
+        
+        Returns:
+            dict -- vocab dict
+        """
+
+        return self.vocab_dict
