@@ -2,9 +2,8 @@ import torch.nn as nn
 
 
 class BiLSTMEncoder(nn.Module):
-    """This class is bidirectional lstm encoder
+    """Bidirectional lstm encoder
     """
-
     def __init__(self, input_size, hidden_size, num_layers=1, is_bidirectional=True, dropout=0.0):
         """This function sets bidirectional lstm neural network parameters
 
@@ -44,7 +43,7 @@ class BiLSTMEncoder(nn.Module):
         return self.num_layers
 
     def forward(self, inputs, seq_lens):
-        """This function propagetes forwardly
+        """Propagates forwardly
 
         Arguments:
             inputs {tensor} -- input data, shape: (batch_size, sequence_len, input_size)

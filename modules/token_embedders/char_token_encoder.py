@@ -1,16 +1,12 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
-from modules.seq2vec_encoders.cnn_encoder import CNNEncoder
 
 
 class CharTokenEncoder(nn.Module):
-    """This calss is token's character-level encoder
+    """Token's character-level encoder
     """
-
     def __init__(self, char_embedding, encoder, dropout=0.0):
-        """This function sets `CharTokenEncoder` parameters
+        """Sets `CharTokenEncoder` parameters
 
         Arguments:
             char_embedding {Module} -- char embedding
@@ -30,7 +26,7 @@ class CharTokenEncoder(nn.Module):
             self.dropout = lambda x: x
 
     def forward(self, inputs):
-        """This function propagates forwardly
+        """Propagates forwardly
 
         Arguments:
             inputs {tensor} -- input data
@@ -41,12 +37,11 @@ class CharTokenEncoder(nn.Module):
 
         batch_size, sent_size, char_seq_size = inputs.size()
 
-        batchsent_char_inputs = inputs.view(
-            -1, char_seq_size)  # (batch_size * sent_size, char_seq_size)
-        batchsent_char_embeding = self.dropout(self.char_embedding(
-            batchsent_char_inputs))  # (batch_size * sent_size, char_seq_size, char_dim)
+        batchsent_char_inputs = inputs.view(-1, char_seq_size)  # (batch_size * sent_size, char_seq_size)
+        batchsent_char_embeding = self.dropout(
+            self.char_embedding(batchsent_char_inputs))  # (batch_size * sent_size, char_seq_size, char_dim)
 
         batchsent_char_outputs = self.dropout(self.encoder(batchsent_char_embeding))
-        batch_sent_char_outputs = batchsent_char_outputs.view(
-            batch_size, sent_size, -1)  # (batch_size, sent_size, output_size)
+        batch_sent_char_outputs = batchsent_char_outputs.view(batch_size, sent_size,
+                                                              -1)  # (batch_size, sent_size, output_size)
         return batch_sent_char_outputs

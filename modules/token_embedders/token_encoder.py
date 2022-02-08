@@ -1,22 +1,17 @@
+import logging
+
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from utils.logging import logger
+logger = logging.getLogger(__name__)
 
 
 class TokenEncoder(nn.Module):
-    """This class encodes token information in multi-view, 
+    """Encodes token information in multi-view, 
     such as various word embeddings, char embedding and so on
     """
-
-    def __init__(self,
-                 word_embedding,
-                 char_embedding,
-                 char_batch_size,
-                 dropout=0.0,
-                 aux_word_embeddings=None):
-        """This function sets `TokenEncoder` model parameters
+    def __init__(self, word_embedding, char_embedding, char_batch_size, dropout=0.0, aux_word_embeddings=None):
+        """Sets `TokenEncoder` model parameters
 
         Arguments:
             word_embedding {Module} -- word embedding model
@@ -38,14 +33,13 @@ class TokenEncoder(nn.Module):
         else:
             self.dropout = lambda x: x
 
-        self.aux_word_embeddings = dict(
-            aux_word_embeddings) if aux_word_embeddings is not None else dict()
+        self.aux_word_embeddings = dict(aux_word_embeddings) if aux_word_embeddings is not None else dict()
 
         for id, aux_word_embedding in self.aux_word_embeddings.items():
             self.add_module('aux_word_embedding_{}'.format(id), aux_word_embedding)
 
     def add_aux_word_embedding(self, aux_word_embeddings):
-        """This function adds aux word embedding
+        """Adds aux word embedding
 
         Arguments:
             aux_word_embeddings {dict} -- aux word embedding dict
@@ -59,11 +53,11 @@ class TokenEncoder(nn.Module):
             self.aux_word_embeddings[id] = aux_word_embedding
 
     def forward(self, seq_inputs, char_seq_inputs=None, aux_seq_inputs=None):
-        """This function propagetes forwardly
-        
+        """Propagates forwardly
+
         Arguments:
             seq_inputs {tensor} -- seq input data
-        
+
         Keyword Arguments:
             char_seq_inputs {tensor} -- char seq input data (default: {None})
             aux_seq_inputs {dict} -- aux seq input data dict (default: {None})
@@ -85,7 +79,6 @@ class TokenEncoder(nn.Module):
 
         if aux_seq_inputs is not None:
             for id, aux_seq_input in aux_seq_inputs.items():
-                token_vecs.append(
-                    self.dropout(getattr(self, 'aux_word_embedding_{}'.format(id))(aux_seq_input)))
+                token_vecs.append(self.dropout(getattr(self, 'aux_word_embedding_{}'.format(id))(aux_seq_input)))
 
         return torch.cat(token_vecs, dim=2)

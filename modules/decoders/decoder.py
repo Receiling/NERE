@@ -1,13 +1,12 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class VanillaSoftmaxDecoder(nn.Module):
-    """This decoder firstly linear transformation then softmax
+    """Softmax decoder
     """
-    def __init__(self, hidden_size, label_size, bias=True):
-        """This function sets vanilla softmax decoder input/output size
+    def __init__(self, hidden_size, label_size, bias=True, reduction='mean'):
+        """Sets vanilla softmax decoder input/output size
 
         Arguments:
             hidden_size {int} -- the size of hidden unit
@@ -15,6 +14,7 @@ class VanillaSoftmaxDecoder(nn.Module):
 
         Keyword Arguments:
             bias {bool} -- adding bias or not (default: {True})
+            reduction {str} -- crossentropy loss recduction (default: {mean})
         """
 
         super().__init__()
@@ -26,7 +26,7 @@ class VanillaSoftmaxDecoder(nn.Module):
         if self.hidden2label.bias is not None:
             self.hidden2label.bias.data.zero_()
 
-        self.loss = nn.CrossEntropyLoss()
+        self.loss = nn.CrossEntropyLoss(reduction=reduction)
 
     def get_input_dim(self):
         return self.hidden_size
@@ -35,11 +35,11 @@ class VanillaSoftmaxDecoder(nn.Module):
         return self.label_size
 
     def forward(self, inputs, labels=None):
-        """This function propagetes forwardly
+        """Propagates forwardly
 
         Arguments:
             inputs {tensor} -- input data
-        
+
         Keyword Arguments:
             labels {tensor} -- label data (default: {None})
 
@@ -47,15 +47,16 @@ class VanillaSoftmaxDecoder(nn.Module):
             dict -- result: loss, predict, softmax_prob
         """
 
-        batch_size, input_size = inputs.size()
+        _, input_size = inputs.size()
 
         assert input_size == self.hidden_size, "input size is not equal to hidden size"
 
         results = {}
         outputs = self.hidden2label(inputs)
-        preds = outputs.argmax(dim=1)
+        log_probs = F.log_softmax(outputs, dim=-1)
+        preds = log_probs.argmax(dim=-1)
+        results["log_probs"] = log_probs
         results["predict"] = preds
-        # results["log_probs"] = F.log_softmax(outputs, dim=1)
 
         if labels is not None:
             avg_loss = self.loss(outputs, labels)

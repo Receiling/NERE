@@ -1,23 +1,15 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class Embedding(nn.Module):
-    """This class is embedding model
+    """Embedding model
     """
-
-    def __init__(self,
-                 vocab_size,
-                 embedding_dim,
-                 padding_idx,
-                 weight=None,
-                 fix_embedding=False,
-                 dropout=0.0):
-        """This function sets `Embedding` model parameters
+    def __init__(self, vocab_size, embedding_dim, padding_idx, weight=None, fix_embedding=False, dropout=0.0):
+        """Sets `Embedding` model parameters
 
         Arguments:
-            vocab_size {int} -- the size of vacabulary
+            vocab_size {int} -- the size of vocabulary
             embedding_dim {int} -- embedding dim
             padding_idx {int} -- the index of padding token
 
@@ -53,7 +45,7 @@ class Embedding(nn.Module):
         return self.padding_idx
 
     def forward(self, inputs):
-        """This function propagetes forwardly
+        """Propagates forwardly
 
         Arguments:
             inputs {tensor} -- input data
