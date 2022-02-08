@@ -1,19 +1,20 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+from utils.nn_utils import gelu
 
 
 class CNNEncoder(nn.Module):
-    """This class is Convolution Neural Network Encoder
+    """Convolution Neural Network Encoder
     """
     def __init__(self,
                  input_size,
                  num_filters,
                  ngram_filter_sizes=(2, 3, 4, 5),
                  output_size=0,
-                 conv_layer_activation=nn.ReLU,
+                 conv_layer_activation=gelu,
                  dropout=0.0):
-        """This funciton sets `CNNEncoder` parameters
+        """Sets `CNNEncoder` parameters
 
         Arguments:
             input_size {int} -- input dim
@@ -22,7 +23,7 @@ class CNNEncoder(nn.Module):
         Keyword Arguments:
             ngram_filter_sizes {tuple} -- filter size list (default: {(2, 3, 4, 5)})
             output_size {[int]} -- output dim (default: {0})
-            conv_layer_activation {nn.Module} -- activation function (default: {nn.ReLU})
+            conv_layer_activation {nn.Module} -- activation function (default: {gelu})
             dropout {float} -- drop out rate
         """
 
@@ -30,7 +31,7 @@ class CNNEncoder(nn.Module):
         self.input_size = input_size
         self.num_filters = num_filters
         self.ngram_filter_sizes = ngram_filter_sizes
-        self.activation = conv_layer_activation()
+        self.activation = conv_layer_activation
         self.output_size = output_size
 
         self.conv_layers = [
@@ -46,7 +47,7 @@ class CNNEncoder(nn.Module):
         maxpool_output_size = self.num_filters * len(self.ngram_filter_sizes)
 
         if self.output_size > 0:
-            self.projection_layer = nn.Linear(maxpool_output_size, self.output_size)
+            self.projection_layer = nn.Sequential(nn.Linear(maxpool_output_size, self.output_size), self.activation)
         else:
             self.output_size = maxpool_output_size
             self.projection_layer = lambda x: x
@@ -56,6 +57,17 @@ class CNNEncoder(nn.Module):
         else:
             self.dropout = lambda x: x
 
+        self.apply(self.init_weights)
+
+    def init_weights(self, module):
+        """Initializes the weights of parameters.
+        """
+
+        if isinstance(module, (nn.Linear, nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=0.02)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
+
     def get_input_dims(self):
         return self.input_size
 
@@ -63,13 +75,13 @@ class CNNEncoder(nn.Module):
         return self.output_size
 
     def forward(self, inputs, mask=None):
-        """This function propagetes forwardly
+        """Propagates forwardly
 
         Arguments:
             inputs {tensor} -- input data, shape: (batch_size, sequence_len, input_size)
 
         Keyword Arguments:
-            mask {tensor} -- mask martrix (default: {None})
+            mask {tensor} -- mask matrix (default: {None})
 
         Returns:
             tensor -- output after cnn
@@ -78,7 +90,9 @@ class CNNEncoder(nn.Module):
         if mask is not None:
             inputs = inputs * mask.unsqueeze(-1).float()
 
-        # Our input is expected to have shape `(batch_size, num_tokens, embedding_dim)`.  The convolution layers expect input of shape `(batch_size, in_channels, sequence_length)`, where the conv layer `in_channels` is our `embedding_dim`.  We thus need to transpose the tensor first.
+        # Our input is expected to have shape `(batch_size, num_tokens, embedding_dim)`.  
+        # The convolution layers expect input of shape `(batch_size, in_channels, sequence_length)`, where the conv layer `in_channels` is our `embedding_dim`. 
+        #  We thus need to transpose the tensor first.
         inputs.transpose_(1, 2)
 
         filter_outputs = []
@@ -86,8 +100,7 @@ class CNNEncoder(nn.Module):
             conv_layer = getattr(self, 'conv_layer_{}'.format(id))
             filter_outputs.append(self.activation(conv_layer(inputs)).max(dim=2)[0])
 
-        maxpool_output = torch.cat(filter_outputs,
-                                   dim=1) if len(filter_outputs) > 1 else filter_outputs[0]
+        maxpool_output = torch.cat(filter_outputs, dim=1) if len(filter_outputs) > 1 else filter_outputs[0]
 
         output = self.projection_layer(maxpool_output)
 

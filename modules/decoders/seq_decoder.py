@@ -1,15 +1,16 @@
-import torch
+import logging
+
 import torch.nn as nn
 import torch.nn.functional as F
 
-from utils.logging import logger
+logger = logging.getLogger(__name__)
 
 
 class SeqSoftmaxDecoder(nn.Module):
-    """This class decodes sequence hidden unit
+    """Decodes sequence output
     """
     def __init__(self, hidden_size, label_size, bias=True):
-        """This function sets SeqSoftmaxDecoder input/output size
+        """Sets SeqSoftmaxDecoder input/output size
 
         Arguments:
             hidden_size {int} -- the size of hidden unit
@@ -37,7 +38,7 @@ class SeqSoftmaxDecoder(nn.Module):
         return self.label_size
 
     def forward(self, seq_inputs, seq_mask=None, seq_labels=None):
-        """This function propagetes forwardly
+        """Propagates forwardly
 
         Arguments:
             seq_inputs {tensor} -- input data, shape: (batch_size, seq_size, input_size)
@@ -47,20 +48,20 @@ class SeqSoftmaxDecoder(nn.Module):
             seq_labels {tensor} -- label data, shape: (batch_size, seq_size) (default: {None})
         
         Returns:
-            dict -- resutls: loss, predict, log_probs
+            dict -- results: loss, predict, log_probs
         """
 
-        batch_size, seq_size, input_size = seq_inputs.size()
+        _, _, input_size = seq_inputs.size()
 
         assert input_size == self.hidden_size, "input size is not equal to hidden size"
 
         results = {}
 
         seq_outpus = self.hidden2label(seq_inputs)
-        seq_log_probs = F.log_softmax(seq_outpus, dim=2)
-        seq_preds = seq_log_probs.argmax(dim=2)
+        seq_log_probs = F.log_softmax(seq_outpus, dim=-1)
+        seq_preds = seq_log_probs.argmax(dim=-1)
         results['predict'] = seq_preds
-        # results['log_probs'] = seq_log_probs
+        results['log_probs'] = seq_log_probs
 
         if seq_labels is not None:
             if seq_mask is not None:
