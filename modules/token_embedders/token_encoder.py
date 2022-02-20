@@ -61,7 +61,7 @@ class TokenEncoder(nn.Module):
         Keyword Arguments:
             char_seq_inputs {tensor} -- char seq input data (default: {None})
             aux_seq_inputs {dict} -- aux seq input data dict (default: {None})
-        
+
         Returns:
             tensor -- token embeding in multi-view
         """
