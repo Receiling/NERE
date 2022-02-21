@@ -145,4 +145,4 @@ This toolkit supports different evaluation criteria:
 
 ## Notifications
 + If **OOM** occurs, we suggest that reducing `train_batch_size` and increasing `gradient_accumulation_steps` (`gradient_accumulation_steps` is used to perform *Gradient Accumulation*). 
-+ Currently, this toolkit does not support training on multi-GPUs.
++ This toolkit currently does not support training on multi-GPUs.
