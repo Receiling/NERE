@@ -270,7 +270,6 @@ class ConfigurationParer():
 
         if not os.path.exists(args.model_checkpoints_dir):
             os.makedirs(args.model_checkpoints_dir)
-
         if args.tensorboard:
             args.tensorboard_dir = os.path.join(args.save_dir, 'tb_output')
             if not os.path.exists(args.tensorboard_dir):
