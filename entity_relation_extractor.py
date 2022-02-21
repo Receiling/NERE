@@ -5,6 +5,7 @@ import logging
 
 import torch
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 import numpy as np
 from transformers import AutoTokenizer, AdamW, get_linear_schedule_with_warmup
 
@@ -115,6 +116,7 @@ def train(args, dataset, model):
                                                 num_warmup_steps=num_warmup_steps,
                                                 num_training_steps=total_train_steps)
 
+    global_step = 0
     last_epoch = 1
     batch_id = 0
     best_f1 = 0.0
@@ -136,7 +138,14 @@ def train(args, dataset, model):
                 model.zero_grad()
 
             if epoch > args.pretrain_epochs:
-                dev_f1 = dev(args, dataset, model)
+                token_score, span_score, ent_score, rel_score, exact_rel_score = dev(args, dataset, model)
+                dev_f1 = ent_score + exact_rel_score
+                if args.tensorboard:
+                    tb_writer.add_scalar('Valid/token_score', token_score, epoch)
+                    tb_writer.add_scalar('Valid/span_score', span_score, epoch)
+                    tb_writer.add_scalar('Valid/ent_score', ent_score, epoch)
+                    tb_writer.add_scalar('Valid/rel_score', rel_score, epoch)
+                    tb_writer.add_scalar('Valid/exact_rel_score', exact_rel_score, epoch)
 
                 if dev_f1 > best_f1:
                     early_stop_cnt = 0
@@ -175,6 +184,9 @@ def train(args, dataset, model):
         if batch_id % args.logging_steps == 0:
             logger.info("Epoch: {} Batch: {} Loss: {} (Ent_loss: {} Rel_loss: {})".format(
                 epoch, batch_id, loss.item(), ent_loss.item(), rel_loss.item()))
+            if args.tensorboard:
+                global_step += 1
+                tb_writer.add_scalar('Train/loss', loss.item(), global_step)
 
         if args.gradient_accumulation_steps > 1:
             loss /= args.gradient_accumulation_steps
@@ -188,6 +200,7 @@ def train(args, dataset, model):
             scheduler.step()
             model.zero_grad()
 
+    logger.info("Loading checkpoint: {} ...".format(args.best_model_path))
     state_dict = torch.load(open(args.best_model_path, "rb"), map_location=torch.device('cpu'))
     model.load_state_dict(state_dict)
     test(args, dataset, model)
@@ -224,7 +237,7 @@ def dev(args, dataset, model):
                       'entity_labels' if args.entity_model == 'joint' else 'entity_span_labels')
     eval_metrics = ['token', 'span', 'ent', 'rel', 'exact-rel']
     token_score, span_score, ent_score, rel_score, exact_rel_score = eval_file(dev_output_file, eval_metrics)
-    return ent_score + exact_rel_score
+    return token_score, span_score, ent_score, rel_score, exact_rel_score
 
 
 def test(args, dataset, model):
@@ -260,6 +273,10 @@ def main():
 
     args = parser.parse_args()
     logger.info(parser.format_values())
+
+    if args.tensorboard:
+        global tb_writer
+        tb_writer = SummaryWriter(args.tensorboard_dir)
 
     # set random seed
     random.seed(args.seed)
