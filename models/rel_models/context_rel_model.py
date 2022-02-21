@@ -12,11 +12,11 @@ from modules.decoders.decoder import VanillaSoftmaxDecoder
 class ConRelModel(nn.Module):
     """Predicts relation type between two candidate entity.
     """
-    def __init__(self, cfg, vocab, input_size, ent_span_feature_size, reduction='mean'):
+    def __init__(self, args, vocab, input_size, ent_span_feature_size, reduction='mean'):
         """Sets `ConRelModel` parameters
 
         Arguments:
-            cfg {dict} -- config parameters for constructing multiple models
+            args {dict} -- config parameters for constructing multiple models
             vocab {dict} -- vocabulary
             input_size {int} -- input size
             ent_span_feature_size {int} -- entity span feature size
@@ -27,17 +27,17 @@ class ConRelModel(nn.Module):
 
         super().__init__()
 
-        self.span_batch_size = cfg.span_batch_size
-        self.context_output_size = cfg.context_output_size
-        self.output_size = cfg.ent_mention_output_size
+        self.span_batch_size = args.span_batch_size
+        self.context_output_size = args.context_output_size
+        self.output_size = args.ent_mention_output_size
         self.activation = gelu
-        self.dropout = cfg.dropout
-        self.device = cfg.device
+        self.dropout = args.dropout
+        self.device = args.device
 
         self.context_span_extractor = CNNSpanExtractor(input_size=input_size,
-                                                       num_filters=cfg.context_cnn_output_channels,
-                                                       ngram_filter_sizes=cfg.context_cnn_kernel_sizes,
-                                                       dropout=cfg.dropout)
+                                                       num_filters=args.context_cnn_output_channels,
+                                                       ngram_filter_sizes=args.context_cnn_kernel_sizes,
+                                                       dropout=args.dropout)
 
         if self.context_output_size > 0:
             self.context2hidden = BertLinear(input_size=self.context_span_extractor.get_output_dims(),

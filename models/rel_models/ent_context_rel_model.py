@@ -12,11 +12,11 @@ from modules.decoders.decoder import VanillaSoftmaxDecoder
 class EntConRelModel(nn.Module):
     """Predicts entity type for each span and relation type for each span pair.
     """
-    def __init__(self, cfg, vocab, input_size, reduction='mean'):
+    def __init__(self, args, vocab, input_size, reduction='mean'):
         """Sets `EntConRelModel` parameters
 
         Arguments:
-            cfg {dict} -- config parameters for constructing multiple models
+            args {dict} -- config parameters for constructing multiple models
             vocab {dict} -- vocabulary
             input_size {int} -- input size
 
@@ -26,32 +26,32 @@ class EntConRelModel(nn.Module):
 
         super().__init__()
 
-        self.span_batch_size = cfg.span_batch_size
-        self.ent_output_size = cfg.ent_output_size
-        self.context_output_size = cfg.context_output_size
-        self.output_size = cfg.ent_mention_output_size
+        self.span_batch_size = args.span_batch_size
+        self.ent_output_size = args.ent_output_size
+        self.context_output_size = args.context_output_size
+        self.output_size = args.ent_mention_output_size
         self.activation = gelu
-        self.dropout = cfg.dropout
-        self.device = cfg.device
+        self.dropout = args.dropout
+        self.device = args.device
 
         self.entity_span_extractor = CNNSpanExtractor(input_size=input_size,
-                                                      num_filters=cfg.entity_cnn_output_channels,
-                                                      ngram_filter_sizes=cfg.entity_cnn_kernel_sizes,
-                                                      dropout=cfg.dropout)
+                                                      num_filters=args.entity_cnn_output_channels,
+                                                      ngram_filter_sizes=args.entity_cnn_kernel_sizes,
+                                                      dropout=args.dropout)
 
         if self.ent_output_size > 0:
             self.ent2hidden = BertLinear(input_size=self.entity_span_extractor.get_output_dims(),
                                          output_size=self.ent_output_size,
                                          activation=self.activation,
-                                         dropout=cfg.dropout)
+                                         dropout=args.dropout)
         else:
             self.ent_output_size = self.entity_span_extractor.get_output_dims()
             self.ent2hidden = lambda x: x
 
         self.context_span_extractor = CNNSpanExtractor(input_size=input_size,
-                                                       num_filters=cfg.context_cnn_output_channels,
-                                                       ngram_filter_sizes=cfg.context_cnn_kernel_sizes,
-                                                       dropout=cfg.dropout)
+                                                       num_filters=args.context_cnn_output_channels,
+                                                       ngram_filter_sizes=args.context_cnn_kernel_sizes,
+                                                       dropout=args.dropout)
 
         if self.context_output_size > 0:
             self.context2hidden = BertLinear(input_size=self.context_span_extractor.get_output_dims(),

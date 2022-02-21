@@ -12,44 +12,43 @@ logger = logging.getLogger(__name__)
 
 
 class PipelineEntModel(nn.Module):
-    """This class utilizes pipeline method to handle
-    entity recognition task, firstly detecting entity
-    spans then using CNN for entity spans typing
+    """Utilizes pipeline method to handle entity recognition task, first detecting entity
+    spans then using CNN for entity spans typing.
     """
-    def __init__(self, cfg, vocab):
-        """This function constructs `PipelineEntModel` components and
+    def __init__(self, args, vocab):
+        """Constructs `PipelineEntModel` components and
         sets `PipelineEntModel` parameters
 
         Arguments:
-            cfg {dict} -- config parameters for constructing multiple models
+            args {dict} -- config parameters for constructing multiple models
             vocab {Vocabulary} -- vocabulary
         """
 
         super().__init__()
         self.vocab = vocab
-        self.lstm_layers = cfg.lstm_layers
+        self.lstm_layers = args.lstm_layers
 
-        if cfg.embedding_model == 'word_char':
-            self.embedding_model = WordCharEmbedModel(cfg, vocab)
+        if args.embedding_model == 'word_char':
+            self.embedding_model = WordCharEmbedModel(args, vocab)
         else:
-            self.embedding_model = PretrainedEmbedModel(cfg, vocab)
+            self.embedding_model = PretrainedEmbedModel(args, vocab)
 
         self.encoder_output_size = self.embedding_model.get_hidden_size()
 
         if self.lstm_layers > 0:
             self.seq_encoder = BiLSTMEncoder(input_size=self.encoder_output_size,
-                                             hidden_size=cfg.lstm_hidden_unit_dims,
-                                             num_layers=cfg.lstm_layers,
-                                             dropout=cfg.dropout)
+                                             hidden_size=args.lstm_hidden_unit_dims,
+                                             num_layers=args.lstm_layers,
+                                             dropout=args.lstm_dropout)
             self.encoder_output_size = self.seq_encoder.get_output_dims()
 
         self.ent_span_decoder = SeqSoftmaxDecoder(hidden_size=self.encoder_output_size,
                                                   label_size=self.vocab.get_vocab_size('entity_span_labels'))
 
-        self.cnn_ent_model = CNNEntModel(cfg, vocab, self.encoder_output_size)
+        self.cnn_ent_model = CNNEntModel(args, vocab, self.encoder_output_size)
 
     def forward(self, batch_inputs):
-        """This function propagetes forwardly
+        """Propagates forwardly
 
         Arguments:
             batch_inputs {dict} -- batch input data
@@ -93,12 +92,12 @@ class PipelineEntModel(nn.Module):
         return results
 
     def get_ent_preds(self, batch_inputs, ent_model_outputs):
-        """This funtion gets entity predictions from entity model outputs
-        
+        """Gets entity predictions from entity model outputs
+
         Arguments:
             batch_inputs {dict} -- batch input data
             ent_model_outputs {dict} -- entity model outputs
-        
+
         Returns:
             list -- entity predictions
         """
@@ -118,8 +117,8 @@ class PipelineEntModel(nn.Module):
         return ent_preds
 
     def get_hidden_size(self):
-        """This function returns sentence encoder representation tensor size
-        
+        """Returns sentence encoder representation tensor size
+
         Returns:
             int -- sequence encoder output size
         """
@@ -127,8 +126,8 @@ class PipelineEntModel(nn.Module):
         return self.encoder_output_size
 
     def get_ent_span_feature_size(self):
-        """This funtitoin returns entity span feature size
-        
+        """Returns entity span feature size
+
         Returns:
             int -- entity span feature size
         """

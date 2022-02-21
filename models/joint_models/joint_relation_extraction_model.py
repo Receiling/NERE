@@ -6,11 +6,11 @@ import numpy as np
 class JointREModel(nn.Module):
     """Combines entity model and relation model
     """
-    def __init__(self, cfg, ent_model, rel_model, vocab):
+    def __init__(self, args, ent_model, rel_model, vocab):
         """Sets `JointREModel` components
 
         Arguments:
-            cfg {dict} -- config parameters for constructing multiple models
+            args {dict} -- config parameters for constructing multiple models
             ent_model {nn.Module} -- entity model
             rel_model {nn.Module} -- relation model
             vocab {dict} -- vocabulary
@@ -20,9 +20,9 @@ class JointREModel(nn.Module):
         self.ent_model = ent_model
         self.rel_model = rel_model
         self.vocab = vocab
-        self.schedule_k = cfg.schedule_k
-        self.device = cfg.device
-        self.pretrain_epochs = cfg.pretrain_epochs
+        self.schedule_k = args.schedule_k
+        self.device = args.device
+        self.pretrain_epochs = args.pretrain_epochs
 
     def forward(self, batch_inputs):
         """Propagates forwardly

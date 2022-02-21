@@ -66,7 +66,7 @@ class PretrainedEncoder(nn.Module):
             token_type_inputs (tensor, optional): token type inputs. Defaults to None.
 
         Returns:
-            tensor: bert output for tokens
+            tensor: pretrained models' output for tokens
         """
 
         if token_type_inputs is None:

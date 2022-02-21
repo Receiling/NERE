@@ -17,44 +17,38 @@ logger = logging.getLogger(__name__)
 class CNNEntModel(nn.Module):
     """Predicts entities using CNN
     """
-    def __init__(self, cfg, vocab, seq_encoder_output_size):
+    def __init__(self, args, vocab, seq_encoder_output_size):
         """Constructs `CNNEntModel` components and
         sets `CNNEntModel` parameters
 
         Arguments:
-            cfg {dict} -- config parameters for constructing multiple models
+            args {dict} -- config parameters for constructing multiple models
             vocab {Vocabulary} -- vocabulary
             seq_encoder_output_size {int} -- sequence encoder output size
         """
 
         super().__init__()
         self.vocab = vocab
-        self.span_batch_size = cfg.span_batch_size
-        self.ent_output_size = cfg.ent_output_size
-        self.span_width_embedding_dims = cfg.span_width_embedding_dims
+        self.span_batch_size = args.span_batch_size
+        self.ent_output_size = args.ent_output_size
         self.activation = gelu
-        self.schedule_k = cfg.schedule_k
-        self.device = cfg.device
+        self.schedule_k = args.schedule_k
+        self.device = args.device
         self.seq_encoder_output_size = seq_encoder_output_size
-        self.pretrain_epochs = cfg.pretrain_epochs
+        self.pretrain_epochs = args.pretrain_epochs
 
         self.entity_span_extractor = CNNSpanExtractor(input_size=self.seq_encoder_output_size,
-                                                      num_filters=cfg.entity_cnn_output_channels,
-                                                      ngram_filter_sizes=cfg.entity_cnn_kernel_sizes,
-                                                      dropout=cfg.dropout)
-
-        if self.span_width_embedding_dims > 0:
-            self.span_width_embedding = nn.Embedding(100, self.span_width_embedding_dims)
-            self.span_width_embedding.weight.data.normal_(mean=0.0, std=0.02)
+                                                      num_filters=args.entity_cnn_output_channels,
+                                                      ngram_filter_sizes=args.entity_cnn_kernel_sizes,
+                                                      dropout=args.dropout)
 
         if self.ent_output_size > 0:
-            self.ent2hidden = BertLinear(input_size=self.entity_span_extractor.get_output_dims() +
-                                         self.span_width_embedding_dims,
+            self.ent2hidden = BertLinear(input_size=self.entity_span_extractor.get_output_dims(),
                                          output_size=self.ent_output_size,
                                          activation=self.activation,
-                                         dropout=cfg.dropout)
+                                         dropout=args.dropout)
         else:
-            self.ent_output_size = self.entity_span_extractor.get_output_dims() + self.span_width_embedding_dims
+            self.ent_output_size = self.entity_span_extractor.get_output_dims()
             self.ent2hidden = lambda x: x
 
         self.entity_decoder = VanillaSoftmaxDecoder(hidden_size=self.ent_output_size,
@@ -204,15 +198,6 @@ class CNNEntModel(nn.Module):
                 all_spans_tensor = all_spans_tensor.cuda(device=device, non_blocking=True)
             all_seq_encoder_reprs = torch.stack(all_seq_encoder_reprs)
             all_spans_feature = ent_span_extractor(all_seq_encoder_reprs, all_spans_tensor).squeeze(1)
-
-        if self.span_width_embedding_dims > 0:
-            all_spans_width_tensor = torch.LongTensor(all_spans_width)
-            if self.device > -1:
-                all_spans_width_tensor = all_spans_width_tensor.cuda(device=self.device, non_blocking=True)
-            all_spans_width_embedding = self.span_width_embedding(all_spans_width_tensor)
-
-            all_spans_feature = self.ent2hidden(torch.cat([all_spans_feature, all_spans_width_embedding], dim=1))
-        else:
             all_spans_feature = self.ent2hidden(all_spans_feature)
 
         idx = 0

@@ -25,7 +25,11 @@ class ConfigurationParer():
                                                     formatter_class=formatter_class,
                                                     **kwargs)
 
-        self.parser.add('-config_file', '--config_file', required=False, is_config_file_arg=True, help='config file path')
+        self.parser.add('-config_file',
+                        '--config_file',
+                        required=False,
+                        is_config_file_arg=True,
+                        help='config file path')
         self.parser.add('-save_dir', '--save_dir', type=str, required=True, help='directory for saving.')
 
     def add_input_args(self):
@@ -39,7 +43,7 @@ class ConfigurationParer():
         group.add('-dev_file', '--dev_file', type=str, required=False, help='dev data file.')
         group.add('-test_file', '--test_file', type=str, required=False, help='test data file.')
         group.add('-max_sent_len', '--max_sent_len', type=int, default=200, help='max sentence length.')
-        group.add('-max_wordpiece_len', '--max_wordpiece_len', type=int, default=512, help='max sentence length.')
+        group.add('-max_subword_len', '--max_subword_len', type=int, default=512, help='max sentence length.')
         group.add('-entity_schema', '--entity_schema', type=str, required=False, help='entity tag schema.')
         group.add('-low_case', '--low_case', type=int, required=False, help='tansform to low case')
 
@@ -50,7 +54,7 @@ class ConfigurationParer():
                   type=str,
                   required=False,
                   help='pretrained word embeddings file.')
-        
+
     def add_model_args(self):
         """Adds model (network) arguments: embedding size, hidden size, etc.
         """
@@ -83,8 +87,8 @@ class ConfigurationParer():
         group.add('-embedding_model',
                   '--embedding_model',
                   type=str,
-                  choices=["word_char", "bert", "pretrained"],
-                  default="bert",
+                  choices=["word_char", "pretrained"],
+                  default="pretrained",
                   help='embedding model.')
         group.add('-entity_model',
                   '--entity_model',
@@ -147,8 +151,8 @@ class ConfigurationParer():
                   type=str,
                   required=False,
                   help='pre-trained model name.')
-        group.add('-ptm_size', '--plm_output_size', type=int, default=768, help='pre-trained model output size.')
-        group.add('-ptm_dropout', '--plm_dropout', type=float, default=0.1, help='pre-trained model dropout rate.')
+        group.add('-ptm_output_size', '--ptm_output_size', type=int, default=768, help='pre-trained model output size.')
+        group.add('-ptm_dropout', '--ptm_dropout', type=float, default=0.1, help='pre-trained model dropout rate.')
         group.add('--fine_tune', '--fine_tune', action='store_true', help='fine-tune pretrained model.')
 
     def add_optimizer_args(self):
@@ -157,27 +161,14 @@ class ConfigurationParer():
 
         # Adam arguments
         group = self.parser.add_argument_group('Adam')
-        group.add('-adam_beta1',
-                  '--adam_beta1',
-                  type=float,
-                  default=0.9,
-                  help="The beta1 parameter used by Adam. ")
-        group.add('-adam_beta2',
-                  '--adam_beta2',
-                  type=float,
-                  default=0.999,
-                  help="The beta2 parameter used by Adam. ")
+        group.add('-adam_beta1', '--adam_beta1', type=float, default=0.9, help="The beta1 parameter used by Adam. ")
+        group.add('-adam_beta2', '--adam_beta2', type=float, default=0.999, help="The beta2 parameter used by Adam. ")
         group.add('-adam_epsilon', '--adam_epsilon', type=float, default=1e-6, help='adam epsilon')
         group.add('-adam_weight_decay_rate',
                   '--adam_weight_decay_rate',
                   type=float,
                   default=0.0,
                   help='adam weight decay rate.')
-        group.add('-adam_bert_weight_decay_rate',
-                  '--adam_bert_weight_decay_rate',
-                  type=float,
-                  default=0.0,
-                  help='adam weight decay rate of Bert module.')
 
     def add_run_args(self):
         """Adds running arguments: learning rate, batch size, etc.
@@ -209,16 +200,11 @@ class ConfigurationParer():
                         help="Starting learning rate. "
                         "Recommended settings: sgd = 1, adagrad = 0.1, "
                         "adadelta = 1, adam = 0.001")
-        self.parser.add('--bert_learning_rate',
-                        '-bert_learning_rate',
+        self.parser.add('--ptm_learning_rate',
+                        '-ptm_learning_rate',
                         type=float,
                         default=3e-5,
-                        help="learning rate for bert, should be smaller than followed parts.")
-        self.parser.add('-lr_decay_rate',
-                        '--lr_decay_rate',
-                        type=float,
-                        default=0.9,
-                        help='learn rate of layers decay rate.')
+                        help="learning rate for pre-trained models, should be smaller than followed parts.")
 
         # testing arguments
         group = self.parser.add_argument_group('Testing')
@@ -284,7 +270,7 @@ class ConfigurationParer():
 
         if not os.path.exists(args.model_checkpoints_dir):
             os.makedirs(args.model_checkpoints_dir)
-        
+
         if args.tensorboard:
             args.tensorboard_dir = os.path.join(args.save_dir, 'tb_output')
             if not os.path.exists(args.tensorboard_dir):

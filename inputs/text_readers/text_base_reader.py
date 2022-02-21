@@ -44,7 +44,7 @@ class TextBaseReader():
 
                 state, results = self.get_subword_tokens(line)
                 if state:
-                    if len(sentence['tokens']) != len(sentence['subword_tokens_index']):
+                    if len(sentence['tokens']) != len(results['subword_tokens_index']):
                         logger.error(
                             "article id: {} sentence id: {} subword_tokens_index length is not equal to tokens.".format(
                                 line['articleId'], line['sentId']))
